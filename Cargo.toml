@@ -1,0 +1,32 @@
+[package]
+name = "stepwise"
+version = "0.0.1"
+edition = "2021"
+authors = ["andy watkins <andy@webcalculator.com>"]
+rust-version = "1.76"
+license = "MIT OR Apache-2.0"
+description = "a library for iterative numeric algos"
+repository = "https://github.com/akanalytics/stepwise"
+homepage = "https://github.com/akanalytics/stepwise"
+readme = "README.md"
+keywords = ["math", "algo", "optimization", "stochastic", "iterative"]
+categories = ["mathematics", "algorithms"]
+publish = true
+
+[dependencies]
+log = { version = "0.4.27", optional = true }
+
+[dev-dependencies]
+log = { version = "0.4", features = ["release_max_level_debug"] }
+rand_core = "0.9.3"
+env_logger = "0.11.7"
+test-log = { version = "0.2", features = ["trace"] }
+rand_pcg = "0.9.0"
+rand = "0.9.0"
+
+
+[lints]
+
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
