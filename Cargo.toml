@@ -1,20 +1,20 @@
 [package]
 name = "stepwise"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2021"
 authors = ["andy watkins <andy@webcalculator.com>"]
 rust-version = "1.76"
 license = "MIT OR Apache-2.0"
-description = "a library for iterative numeric algos"
+description = "A library for stepwise algorithms"
 repository = "https://github.com/akanalytics/stepwise"
 homepage = "https://github.com/akanalytics/stepwise"
 readme = "README.md"
-keywords = ["math", "algo", "optimization", "stochastic", "iterative"]
+keywords = ["math", "solver", "optimization", "stochastic", "iterative"]
 categories = ["mathematics", "algorithms"]
 publish = true
 
 [dependencies]
-log = { version = "0.4.27", optional = true }
+
 
 [dev-dependencies]
 log = { version = "0.4", features = ["release_max_level_debug"] }

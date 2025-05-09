@@ -1,4 +1,4 @@
-//! Metrics allow you to collect maximums, averages etc, and use them for convergence criteria.
+//! Metrics collect maximums, averages etc, for use as convergence criteria.
 //!
 //! # Overview
 //!

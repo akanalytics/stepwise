@@ -1,3 +1,10 @@
+//! Some very basic linear albegra applicable to Rust slices, and hence can be used standalone, or with other linear
+//! algebrara libraries offering an as_slice type of conversion
+//! - dot product
+//! - norms, l2/euclidean, l-inf or max_norms, distance,
+//! - component-wise addition and subtraction
+//! - formatting / display
+//!
 use std::fmt::Display;
 
 #[doc(hidden)]
@@ -119,6 +126,11 @@ macro_rules! assert_approx_eq {
     };
 }
 
+/// Assert that two values are comparable, but approximately not-equal.
+///
+/// Note that if you compare two slices of different lengths,
+/// they will be neither approximately equal, nor approximately not-equal.
+///
 #[macro_export]
 macro_rules! assert_approx_ne {
     ($a:expr, $b:expr) => {
@@ -137,6 +149,7 @@ macro_rules! assert_approx_ne {
     };
 }
 
+/// Basic linear algebra functions.
 #[allow(dead_code)]
 pub trait VectorExt {
     fn zero(n: usize) -> Vec<f64>;

@@ -1,6 +1,4 @@
 #![doc=include_str!("../README.md")]
-
-// mod driver3;
 mod algo;
 pub mod algos;
 mod driver;
@@ -19,10 +17,10 @@ use std::sync::Arc;
 
 pub use crate::math::VectorExt;
 pub use crate::{
-    algo::{Algo, TolX},
+    algo::Algo,
     driver::Driver,
     driver::{fail_after_iters, fixed_iters, with_timeout},
-    step::{Progress, Step},
+    step::Step,
 };
 
 pub mod utilities {
@@ -30,6 +28,11 @@ pub mod utilities {
     pub use crate::step::format_duration;
 }
 
+/// Use `stepwise::prelude::*` for a 'no fuss' include everything approach.
+///
+/// metrics, problems, algos are brought into scope at the module level, so
+/// an individual metric would be refered to as [`metrics::MovingAvg`] and an algorithm
+/// as [`algos::GradientDescent`]
 pub mod prelude {
     pub use crate::math::VectorExt;
     pub use crate::{
@@ -37,7 +40,7 @@ pub mod prelude {
         metrics::Metric,
         problems,
         utilities::{format_duration, Tolerance},
-        with_timeout, Algo, Driver, DriverError, Progress, TolX
+        with_timeout, Algo, Driver, DriverError,
     };
 }
 

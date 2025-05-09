@@ -6,10 +6,11 @@ use std::{
 use crate::DriverError;
 
 #[derive(Debug, Clone)]
-pub enum Progress {
+pub(crate) enum Progress {
     Failed(DriverError),
     Converged,
     InProgressPercentage(f64),
+    #[allow(clippy::enum_variant_names)]
     InProgress,
     NotStarted,
 }
@@ -24,6 +25,10 @@ impl Default for Progress {
 //     assert_send_sync::<Progress>();
 // }
 
+/// A small struct that holds iteration count, elapsed time etc for each algorithm step.
+///
+/// The callbacks [`on_step`](crate::Driver::on_step) and [`converge_when`](crate::Driver::converge_when)
+/// give access to a `Step` structure.
 #[derive(Debug, Default, Clone)]
 pub struct Step {
     pub(crate) iteration: usize,
@@ -41,6 +46,9 @@ impl Display for Step {
 }
 
 impl Step {
+    ///  The iteration count.
+    ///
+    /// Represents how many times 'step' has been invoked. Hence the first iteration is 1.
     pub fn iteration(&self) -> usize {
         self.iteration
     }

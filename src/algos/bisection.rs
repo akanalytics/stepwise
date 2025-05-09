@@ -24,17 +24,19 @@ use std::{convert::Infallible, error::Error, fmt::Debug, ops::ControlFlow, sync:
 ///
 /// println!("iter       x0        x1         x-mid         f");
 ///
-/// while let Ok(Some((algo, step))) = driver.iter_step() {
-///     let [x0, x1] = algo.x();
-///     println!(
-///         "{i:>4}  [{x0:.7}, {x1:.7}]  {xmid:.7}  {f:+.7}",
-///         i = step.iteration(),
-///         xmid = (x0 + x1) / 2.0,
-///         f = algo.f_mid()
-///     );
-/// }
+/// let (solved, step) = driver
+///     .on_step(|algo, step| {
+///        let [x0, x1] = algo.x();
+///        println!(
+///           "{i:>4}  [{x0:.7}, {x1:.7}]  {xmid:.7}  {f:+.7}",
+///           i = step.iteration(),
+///           xmid = (x0 + x1) / 2.0,
+///           f = algo.f_mid()
+///        );
+///     })
+///     .solve()
+///     .unwrap();
 ///
-/// let (solved, _step) = driver.solve().expect("solving failed");
 /// assert_approx_eq!(solved.x().as_slice(), &[1.5213, 1.5213], 0.0001);
 /// ```
 ///
@@ -121,26 +123,26 @@ where
 {
     type Error = E;
 
-    fn step(&mut self) -> ControlFlow<Result<(), E>, Result<(), E>> {
+    fn step(&mut self) -> (ControlFlow<()>, Result<(), E>) {
         // let mid = f64::midpoint(self.x[0], self.x[1]);
         let mid = (self.x[0] + self.x[1]) / 2.0;
         match (self.f)(mid) {
             Ok(y) => self.f_mid = y,
-            Err(e) => return ControlFlow::Break(Err(e)),
+            Err(e) => return (ControlFlow::Break(()), Err(e)),
         };
 
         if self.f_mid == 0.0 {
             self.x = [mid, mid];
-            return ControlFlow::Break(Ok(())); // convergence
+            return (ControlFlow::Break(()), Ok(())); // convergence
         }
 
         if self.f_mid * self.f_lo < 0.0 {
             self.x[1] = mid;
-            ControlFlow::Continue(Ok(()))
+            (ControlFlow::Continue(()), Ok(()))
         } else {
             self.x[0] = mid;
             self.f_lo = self.f_mid;
-            ControlFlow::Continue(Ok(()))
+            (ControlFlow::Continue(()), Ok(()))
         }
     }
 }

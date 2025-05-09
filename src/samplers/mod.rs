@@ -1,3 +1,40 @@
+//! Samplers are containers for sampling data or convergence trajectories; or recording epochs/iterations for later tabulation, plotting or analysis.
+//!
+//! | Container | Description |
+//! |:---  |:---  |
+//! | [`SampleVec`] | a reservoir sampler for periodic sampling  |
+//! | [`SampleDeque`] | a reservoir sampler with guaranteed front and back minimum samples. Ideal for plots where the initial and final points are important to capture |
+//!
+//! ### Example
+//! ```rust
+//! # use stepwise::{assert_approx_eq, problems::sphere_grad, algos::GradientDescent};
+//! # use std::time::Duration;
+//! use stepwise::{VectorExt as _, Driver, fixed_iters, Step, samplers::SampleDeque};
+//! # let sphere_grad = |x: &[f64]| x.iter().map(|x| 2.0 * x).collect::<Vec<_>>();
+//! # let learning_rate = 0.1;
+//! # let initial_estimate = vec![5.5, 6.5];
+//! # let gradient_descent = GradientDescent::new(learning_rate, initial_estimate, sphere_grad);
+//!
+//! // create a container with 10 initial, and 10 final samples,
+//! // and 500 samples evenly taken from the 1,000,000 iterations
+//! // this allows minimal memory use, and fast plotting
+//! let mut sampler = SampleDeque::with_sizes(10, 500, 10);
+//!
+//! type Point = (usize, Vec<f64>);  // (iteration number, X-vector)
+//!
+//! let (_solved, _step) = fixed_iters(gradient_descent, 1_000_000)
+//!     .on_step(|algo, step| {
+//!         let point: Point = (step.iteration(), algo.x().to_vec());
+//!         sampler.sample(point);
+//!    })
+//!    .solve()
+//!    .unwrap();
+//!
+//!
+//! // plot_data will have 500 evenly spaced samples, with the first and
+//! // last 10 items guaranteed to be captured
+//! let plot_data : Vec<Point> = sampler.into_unordered_iter().collect();
+//! ```
 mod sample_deque;
 mod sample_vec;
 

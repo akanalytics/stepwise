@@ -14,15 +14,15 @@ impl CountingSolver {
 impl Algo for CountingSolver {
     type Error = std::fmt::Error;
 
-    fn step(&mut self) -> ControlFlow<Result<(), Self::Error>, Result<(), Self::Error>> {
+    fn step(&mut self) -> (ControlFlow<()>, Result<(), Self::Error>) {
         trace!("adding 1 to {} (MAX-{})", self.0, usize::MAX - self.0);
 
         let res = self.0.checked_add(1).ok_or(fmt::Error);
         match res {
             Ok(v) => self.0 = v,
-            Err(e) => return ControlFlow::Break(Err(e)),
+            Err(e) => return (ControlFlow::Break(()), Err(e)),
         };
-        ControlFlow::Continue(Ok(()))
+        (ControlFlow::Continue(()), Ok(()))
     }
 }
 

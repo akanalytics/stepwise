@@ -1,6 +1,8 @@
 use crate::{
-    algo::result_to_control_flow, progress_bar::display_progress_bar, step::Step, Algo, Progress,
-    DriverError, TolX,
+    algo::{result_to_control_flow, TolX},
+    progress_bar::display_progress_bar,
+    step::{Progress, Step},
+    Algo, DriverError,
 };
 use private::*;
 use std::{
@@ -46,10 +48,26 @@ pub fn with_timeout<S: Algo>(algo: S, timeout: Duration) -> BasicDriver<S> {
     }
 }
 
+/// The executor that controls an algorithm's iteration, and early stopping.
+///
+/// Drivers are created by factory methods: [`fixed_iters`], [`fail_after_iters`], [`with_timeout`]
+///
+/// The Driver consumes the algorithm during factory construction, but mutably lends it
+/// back during iteration in [`on_step`](Driver::on_step) and
+/// [`converge_when`](Driver::converge_when), and finally returns the algorithm back to the caller after solving.
+///
+///
+///
 pub trait Driver
 where
     Self: DriverExt,
 {
+    fn test()
+    where
+        Self: Sized,
+    {
+    }
+
     /// Runs the algorithm, until failure, iteration exhaustion, or convergence.
     ///
     /// In cases of success, the algo in its final state and
@@ -77,6 +95,24 @@ where
     where
         Self: Sized;
 
+    // fn iterate(&mut self) -> Result<(&mut Self::Algo, &Step), DriverError> {
+    //     let cf = self.solve_once();
+    //     match cf {
+    //         ControlFlow::Continue(res) => {
+    //             res?; // TODO! error should never happen in continue case
+    //             let (algo, step) = self.solver_step_mut();
+    //             Ok((algo, step))
+    //         }
+
+    //         ControlFlow::Break(res) => {
+    //             res?;
+    //             let (algo, step) = self.solver_step_mut();
+    //             Ok((algo, step))
+    //         }
+    //     }
+    // }
+
+    #[doc(hidden)]
     fn iter_step(&mut self) -> Result<Option<(&mut Self::Algo, &Step)>, DriverError> {
         let cf = self.solve_once();
         match cf {
@@ -93,7 +129,6 @@ where
         }
     }
 
-
     /// Invoked after each iteration, allowing printing or debugging of the iteration [step](Step).
     /// Can be used to capture details of the iteration. See [`Self::try_on_step`].
     fn try_on_step<F, E>(self, f: F) -> TryForEachDriver<Self, F>
@@ -106,9 +141,9 @@ where
         TryForEachDriver { driver: self, f }
     }
 
-    /// Invoked after each iteration, allowing printing or debugging of the iteration [Step]. Any errors 
+    /// Invoked after each iteration, allowing printing or debugging of the iteration [Step]. Any errors
     /// encountered by the underlying algorithm will terminate the solving, and [`Self::solve`] will return the error.
-    /// 
+    ///
     /// Can be used to capture details of the iteration, or update hyperparameters on the algorithm for adaptive learning.
     fn on_step<F>(self, f: F) -> ForEachDriver<Self, F>
     where
@@ -120,7 +155,7 @@ where
 
     /// Used for early stopping.
     ///  
-    /// Common convergence predicates are step size below a small epsilon, or residuals being below near zero. 
+    /// Common convergence predicates are step size below a small epsilon, or residuals being below near zero.
     /// Some specific convergence criteria are best handled by using [`metrics`](crate::metrics) within this callback.
     fn converge_when<F>(self, pred: F) -> ConvergedWhenDriver<Self, F>
     where
@@ -131,7 +166,7 @@ where
     }
 
     /// Decide when to abandon iteration with [`Self::solve`] returning [`DriverError::FailIfPredicate`].
-    /// 
+    ///
     /// Convergence predicates are tested first.
     ///
     /// Common failure predicates are residuals growing in size after an initial set of iterations,
@@ -274,7 +309,7 @@ pub struct ProgressBarDriver<D> {
     next_progress_display: Duration,
 }
 
-pub struct TolXDriver<D>
+struct TolXDriver<D>
 where
     D: DriverExt,
     D::Algo: TolX,
@@ -400,14 +435,14 @@ impl<S: Algo> DriverExt for BasicDriver<S> {
         let cf = self.algo.as_mut().unwrap().step();
 
         match cf {
-            ControlFlow::Break(Ok(..)) => ControlFlow::Break(Ok(())),
-            ControlFlow::Continue(Ok(..)) => ControlFlow::Continue(Ok(())),
-            ControlFlow::Break(Err(e)) => {
+            (ControlFlow::Continue(_), Ok(_)) => ControlFlow::Continue(Ok(())),
+            (ControlFlow::Break(_), Ok(_)) => ControlFlow::Break(Ok(())),
+            // on an error we abandon, regardless of what algo say about continuing
+            (_, Err(e)) => {
                 let e = DriverError::AlgoError(Arc::new(e));
                 self.step.progress = Progress::Failed(e.clone());
                 ControlFlow::Break(Err(e))
             }
-            _ => unreachable!(),
         }
     }
 }
@@ -459,8 +494,7 @@ where
         // `?` means that errors prevent the on_step running
         let _res = self.driver.solve_once()?;
         let (algo, step) = self.driver.solver_step_mut();
-        let res =
-            (self.f)(algo, step).map_err(|e| DriverError::AlgoError(Arc::from(e)));
+        let res = (self.f)(algo, step).map_err(|e| DriverError::AlgoError(Arc::from(e)));
         result_to_control_flow(res)?;
         ControlFlow::Continue(Ok(()))
     }
@@ -637,15 +671,15 @@ mod tests {
     impl Algo for CountingSolver {
         type Error = fmt::Error;
 
-        fn step(&mut self) -> ControlFlow<Result<(), Self::Error>, Result<(), Self::Error>> {
+        fn step(&mut self) -> (ControlFlow<()>, Result<(), Self::Error>) {
             trace!("adding 1 to {} (MAX-{})", self.0, usize::MAX - self.0);
 
             let res = self.0.checked_add(1).ok_or(fmt::Error);
             match res {
                 Ok(v) => self.0 = v,
-                Err(e) => return ControlFlow::Break(Err(e)),
+                Err(e) => return (ControlFlow::Break(()), Err(e)),
             };
-            ControlFlow::Continue(Ok(()))
+            (ControlFlow::Continue(()), Ok(()))
         }
     }
 

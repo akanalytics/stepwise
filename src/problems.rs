@@ -1,5 +1,7 @@
 //! Sample problems for testing optimization, along with their gradient functions
 //!
+//! A set of classic objective functions and their gradients, along with
+//! uniform and gaussian noise functions. Handy for testing and benchmarking.
 //!
 //! See <https://en.wikipedia.org/wiki/Test_functions_for_optimization>
 //!

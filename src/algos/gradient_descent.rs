@@ -1,4 +1,4 @@
-use crate::{algo::StepControlFlow, Algo};
+use crate::{algo::AlgoResult, Algo};
 use std::{convert::Infallible, ops::ControlFlow};
 
 ///
@@ -37,7 +37,7 @@ use std::{convert::Infallible, ops::ControlFlow};
 /// assert_approx_eq!(solved.x(), [0.0, 0.0].as_slice());
 /// ```
 ///
-/// # Example 
+/// # Example
 /// The learning rate is adaptively changed during the optimization process.
 ///
 /// ```rust
@@ -101,10 +101,10 @@ where
 {
     type Error = Infallible;
 
-    fn step(&mut self) -> StepControlFlow<Self::Error> {
+    fn step(&mut self) -> AlgoResult<Self::Error> {
         self.update_gradient();
         // allow stepwise Driver to decide when to cease iteration
-        ControlFlow::Continue(Ok(()))
+        (ControlFlow::Continue(()), Ok(()))
     }
 }
 
