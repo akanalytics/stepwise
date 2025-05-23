@@ -20,7 +20,7 @@ use std::{
 
 /// Constructs a [`Driver`](super::Driver) with a fixed number of iterations
 ///
-/// After this number of itersations the algo is deemed to have converged on a solution.
+/// After this number of iterations the algo is deemed to have converged on a solution.
 /// If [`Driver::converge_when`](super::Driver::converge_when) is used, then iteration may terminate early.
 ///
 /// Logically it  applies [`set_fixed_iters`](super::Driver::set_fixed_iters) to a new Driver
