@@ -1,4 +1,4 @@
-use super::SamplingOutcome;
+use super::{Sampler, SamplingOutcome};
 use crate::rng::TinyRng;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -7,6 +7,12 @@ pub struct SampleVec<T> {
     sample_size: usize,
     seen: usize,
     rng: TinyRng,
+}
+
+impl<T> Sampler<T> for SampleVec<T> {
+    fn sample(&mut self, item: T) -> SamplingOutcome<T> {
+        SampleVec::sample(self, item)
+    }
 }
 
 /// Source: <https://en.wikipedia.org/wiki/Reservoir_sampling>
@@ -96,12 +102,18 @@ impl<T> SampleVec<T> {
         &self.inner
     }
 
-    /// This is irreversible and consumes the sample.
+    /// This is irreversible and consumes the sample. Requires `T: Ord`
     pub fn into_ordered_vec(mut self) -> Vec<T>
     where
         T: Ord,
     {
         self.inner.sort();
+        self.inner
+    }
+
+    /// This is irreversible and consumes the sample.
+    pub fn into_ordered_vec_by_key<K: Ord>(mut self, f: impl FnMut(&T) -> K) -> Vec<T> {
+        self.inner.sort_by_key(f);
         self.inner
     }
 

@@ -1,6 +1,6 @@
 use log::trace;
 use std::{error::Error, fmt, ops::ControlFlow};
-use stepwise::{fixed_iters, Algo, Driver};
+use stepwise::{fixed_iters, Algo};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct CountingSolver(usize);

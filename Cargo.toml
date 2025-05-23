@@ -1,6 +1,6 @@
 [package]
 name = "stepwise"
-version = "0.0.2"
+version = "0.0.3"
 edition = "2021"
 authors = ["andy watkins <andy@webcalculator.com>"]
 rust-version = "1.76"
@@ -9,14 +9,19 @@ description = "A library for stepwise algorithms"
 repository = "https://github.com/akanalytics/stepwise"
 homepage = "https://github.com/akanalytics/stepwise"
 readme = "README.md"
-keywords = ["math", "solver", "optimization", "stochastic", "iterative"]
+keywords = ["math", "solver", "optimization", "iterative"]
 categories = ["mathematics", "algorithms"]
 publish = true
 
 [dependencies]
+serde = { version = "1.0", optional = true, default-features = false }
+serde_json = { version = "1.0.140", optional = true }
 
 
 [dev-dependencies]
+iai-callgrind = "0.14.0"
+serde_json = { version = "1.0.140" }
+criterion = "0.6.0"
 log = { version = "0.4", features = ["release_max_level_debug"] }
 rand_core = "0.9.3"
 env_logger = "0.11.7"
@@ -24,9 +29,26 @@ test-log = { version = "0.2", features = ["trace"] }
 rand_pcg = "0.9.0"
 rand = "0.9.0"
 
+[features]
+default = ["serde"]
+serde = ["dep:serde", "dep:serde_json"]
 
 [lints]
 
+# you will need this if benchmarking
+# [profile.bench]
+# debug = true
+
+
+[[bench]]
+name = "bisection_criterion"
+path = "benches/bisection_criterion.rs"
+harness = false
+
+[[bench]]
+name = "bisection_iai"
+path = "benches/bisection_iai.rs"
+harness = false
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docsrs"]

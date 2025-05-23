@@ -4,6 +4,8 @@
 //! |:---  |:---  |
 //! | [`SampleVec`] | a reservoir sampler for periodic sampling  |
 //! | [`SampleDeque`] | a reservoir sampler with guaranteed front and back minimum samples. Ideal for plots where the initial and final points are important to capture |
+//! | [`ProgressBar`] | prints a progress bar |
+//! | [`Tabulate`] | displays a simple table using `println` style formatting |
 //!
 //! ### Example
 //! ```rust
@@ -35,11 +37,17 @@
 //! // last 10 items guaranteed to be captured
 //! let plot_data : Vec<Point> = sampler.into_unordered_iter().collect();
 //! ```
+mod progress_bar;
 mod sample_deque;
 mod sample_vec;
+mod tabulate;
 
+use std::io::{self, IsTerminal, Write};
+
+pub use progress_bar::ProgressBar;
 pub use sample_deque::SampleDeque;
 pub use sample_vec::SampleVec;
+pub use tabulate::Tabulate;
 
 /// Indicates the action taken by sampling.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -48,8 +56,59 @@ pub enum SamplingOutcome<T> {
     Selected,
 
     /// The candidate was selected, the evicted item is returned.
+    /// An item can replace itself, if the item is processed, but not retained.
     Replaced(T),
 
     /// The candidate was rejected and not added to the sample, the candiate is returned
     Rejected(T),
+}
+
+/// Sampler trait
+///
+/// Samples an item and either...
+/// - Selects the item
+/// - Selects the item, but discards an existing item
+/// - Rejects the item
+///
+pub trait Sampler<T> {
+    fn sample(&mut self, item: T) -> SamplingOutcome<T>;
+}
+
+#[allow(dead_code)]
+#[derive(Debug)]
+pub(crate) enum Destination<'a> {
+    Stdout,
+    Stderr,
+    StringVecRef(&'a mut Vec<String>),
+    NoRender,
+}
+
+#[allow(dead_code)]
+impl Destination<'_> {
+    fn check_visibility(self) -> Self {
+        match self {
+            Self::StringVecRef(..) => self,
+            Self::Stdout | Self::Stderr if std::env::var("NO_COLOR").is_ok() => Self::NoRender,
+            Self::Stdout if !std::io::stdout().is_terminal() => Self::NoRender,
+            Self::Stderr if !std::io::stderr().is_terminal() => Self::NoRender,
+            _ => self,
+        }
+    }
+
+    fn render_on(&mut self, text: &str) {
+        match self {
+            Destination::Stdout => {
+                let _ = writeln!(io::stderr().lock(), "{text}");
+                let _ = io::stdout().flush();
+            }
+            Destination::Stderr => {
+                let _ = writeln!(io::stderr().lock(), "{text}");
+                let _ = io::stderr().flush();
+            }
+            Destination::StringVecRef(vec) => {
+                vec.push(text.to_string());
+            }
+            Destination::NoRender => {}
+        }
+    }
 }

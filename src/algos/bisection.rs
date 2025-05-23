@@ -100,17 +100,26 @@ impl Bisection<()> {
 }
 
 impl<F> Bisection<F> {
+    #[inline]
     pub fn x(&self) -> [f64; 2] {
         self.x
     }
 
     /// The midpoint of the current range.
+    #[inline]
     pub fn x_mid(&self) -> f64 {
         // f64::midpoint(self.x[0], self.x[1])
         (self.x[0] + self.x[1]) / 2.0
     }
 
+    /// The width or spread of the current range.
+    #[inline]
+    pub fn x_spread(&self) -> f64 {
+        self.x[1] - self.x[0]
+    }
+
     /// The function, `f`, evaluated at the midpoint of the current range.
+    #[inline]
     pub fn f_mid(&self) -> f64 {
         self.f_mid
     }
@@ -123,6 +132,7 @@ where
 {
     type Error = E;
 
+    #[inline]
     fn step(&mut self) -> (ControlFlow<()>, Result<(), E>) {
         // let mid = f64::midpoint(self.x[0], self.x[1]);
         let mid = (self.x[0] + self.x[1]) / 2.0;
@@ -150,7 +160,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{assert_approx_eq, fixed_iters, with_timeout, Driver, Step};
+    use crate::{assert_approx_eq, fixed_iters, with_timeout, Step};
     use std::{thread, time::Duration};
     use test_log::test;
 

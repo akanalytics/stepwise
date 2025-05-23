@@ -1,4 +1,4 @@
-use std::{error::Error, fmt::Debug, ops::ControlFlow};
+use std::{error::Error, ffi::OsStr, io, ops::ControlFlow, path::Path};
 
 /// Algorithms implement this trait to work with the library.
 ///
@@ -7,8 +7,6 @@ use std::{error::Error, fmt::Debug, ops::ControlFlow};
 ///
 /// The "problem" being solved and any initial starting conditions are part of the algo, not
 /// seperate entities.
-///
-/// Use [`std::convert::Infallible`] for `Error` if the algorithm cannot fail.
 ///
 /// The return parameter indicates whether iteration *can* continue, and propagates any errors encountered.
 ///
@@ -44,8 +42,8 @@ use std::{error::Error, fmt::Debug, ops::ControlFlow};
 ///
 /// The learning rate is public, and can be changed (is _adaptive_) during the optimization process.
 /// ```
-/// use std::{convert::Infallible, error::Error, ops::ControlFlow};
-/// use stepwise::Algo;
+/// use std::{error::Error, ops::ControlFlow, convert::Infallible};
+/// use stepwise::{Algo, BoxedError};
 ///
 /// //
 /// pub struct GradientDescent<G> {
@@ -61,7 +59,7 @@ use std::{error::Error, fmt::Debug, ops::ControlFlow};
 /// {
 ///     type Error = Infallible;
 ///
-///     fn step(&mut self) -> (ControlFlow<()>, Result<(),Infallible>) {
+///     fn step(&mut self) -> (ControlFlow<()>, Result<(), Infallible>) {
 ///        let dfdx = (self.gradient_fn)(&self.x);
 ///        for i in 0..self.x.len() {
 ///            self.x[i] -=  self.learning_rate * dfdx[i];
@@ -148,30 +146,150 @@ pub trait Algo {
     type Error: Error + Send + Sync + 'static;
 
     fn step(&mut self) -> (ControlFlow<()>, Result<(), Self::Error>);
+
+    /// Implement this method to support recovery from a checkpoint file
+    ///
+    /// Typically the file format will be binary for checkpoint recovery (to avoid any loss of precision).
+    ///
+    /// # Example:
+    /// ```ignore
+    /// impl Algo for MyAlgo {
+    ///
+    ///     fn read(&mut self, format: &FileFormat, reader: &mut dyn io::Read) -> Result<(), io::Error> {
+    ///         let mut new_algo: T = serde_json::from_reader(reader)?;
+    ///
+    ///         // typically some algo members will not be serialised: the objective function or closure perhaps
+    ///         // these can cloned/copied/moved from the old self.
+    ///         // `std::mem::swap` can be used to 'swap in' items as the old self is discarded (`*self = new_algo`)
+    ///         move_partial_from(&mut new_algo, self);
+    ///         *self = new_algo;
+    ///         Ok(())
+    ///     }
+    /// }
+    /// ```
+    fn read_file(&mut self, fmt: &FileFormat, r: &mut dyn io::Read) -> Result<(), io::Error> {
+        let _ = (r, fmt);
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "file reading not supported by this algorithm".to_string(),
+        ))
+    }
+
+    /// Implement this trait to support writing checkpoint files
+    ///
+    /// Typically the file format will be binary for checkpoint recovery (to avoid any loss of precision),
+    /// but perhaps CSV also for logging and plotting.
+    ///
+    /// # Example:
+    /// ```ignore
+    /// impl Algo for MyAlgo {
+    ///
+    ///     fn write(&mut self, ff: FileFormat, w: &mut dyn io::Write) -> Result<(), io::Error> {
+    ///         match ff {
+    ///             FileFormat::Json => Ok(serde_json::to_writer_pretty(write, &self)?),
+    ///             _ => return Err(ff.unsupported_error()),
+    ///         }
+    ///     }
+    ///     // ..other methods
+    /// }
+    /// ```
+    fn write_file(&self, fmt: &FileFormat, w: &mut dyn io::Write) -> Result<(), io::Error> {
+        let _ = (w, fmt);
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "file writing not supported by this algorithm".to_string(),
+        ))
+    }
 }
 
-/// The return type for the Algo trait's `step` method
+/// Used internally by algorithms to determine whether they can support writing a checkpoint file of the designated type.
 ///
-pub(crate) type AlgoResult<E> = (ControlFlow<()>, Result<(), E>);
+/// When checkpoints are specified by [`Driver::checkpoint`](crate::Driver::checkpoint), the file format is determined from
+/// the file extension of the supplied path.
+///
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FileFormat {
+    Csv { with_header: bool },
+    Json,
+    Control,
+    Custom { extension: String },
+}
 
-impl<S: Algo + ?Sized> Algo for Box<S> {
-    type Error = S::Error;
+impl FileFormat {
+    pub fn from_path(path: &Path) -> Self {
+        Self::from_os_str(path.extension().unwrap_or_default())
+    }
 
-    fn step(&mut self) -> AlgoResult<Self::Error> {
-        (**self).step()
+    pub fn from_os_str(file_extension: &OsStr) -> Self {
+        match file_extension
+            .to_ascii_lowercase()
+            .to_string_lossy()
+            .as_ref()
+        {
+            "json" => Self::Json,
+            "control" => Self::Control,
+            ext => Self::Custom {
+                extension: ext.to_string(),
+            },
+        }
+    }
+
+    pub fn to_extension(&self) -> String {
+        match &self {
+            FileFormat::Csv { with_header: _ } => "csv".to_string(),
+            FileFormat::Json => "json".to_string(),
+            FileFormat::Control => "control".to_string(),
+            FileFormat::Custom { extension } => extension.to_string(),
+        }
+    }
+
+    /// Will generate an [`io::Error`] indicating that the file format is unsupported
+    pub fn unsupported_error(&self) -> io::Error {
+        io::Error::new(
+            io::ErrorKind::Unsupported,
+            format!("{self:?} is not supported"),
+        )
     }
 }
 
-pub fn result_to_control_flow<T, E>(res: Result<T, E>) -> ControlFlow<Result<(), E>, T> {
-    match res {
-        Ok(t) => ControlFlow::Continue(t),
-        Err(e) => ControlFlow::Break(Err(e)),
+pub(crate) trait FileReader {
+    fn read_file(&mut self, format: &FileFormat, read: &mut dyn io::Read) -> Result<(), io::Error>;
+}
+
+pub(crate) trait FileWriter {
+    fn write_file(&self, format: &FileFormat, write: &mut dyn io::Write) -> Result<(), io::Error>;
+}
+
+impl<A> FileReader for A
+where
+    A: Algo,
+{
+    fn read_file(&mut self, fmt: &FileFormat, reader: &mut dyn io::Read) -> Result<(), io::Error>
+    where
+        Self: Sized,
+    {
+        Algo::read_file(self, fmt, reader)
     }
 }
 
-pub(crate) trait TolX {
-    type X: Debug + 'static;
-    type Error: Error + Send + Sync + 'static;
+impl<A> FileWriter for A
+where
+    A: Algo,
+{
+    fn write_file(&self, fmt: &FileFormat, writer: &mut dyn io::Write) -> Result<(), io::Error>
+    where
+        Self: Sized,
+    {
+        Algo::write_file(self, fmt, writer)
+    }
+}
 
-    fn tol_x(&self, prior: Option<&Self::X>) -> Result<(Option<f64>, Self::X), Self::Error>;
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn algo_dyn_compatibility() {
+        let _x: &dyn Algo<Error = io::Error>;
+    }
 }

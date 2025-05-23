@@ -1,4 +1,4 @@
-use super::SamplingOutcome;
+use super::{Sampler, SamplingOutcome};
 use crate::samplers::SampleVec;
 use std::collections::VecDeque;
 
@@ -14,6 +14,9 @@ const RANDOM_SEED: u64 = 42;
 /// these head and tail regions. The middle region is used to sample from the rest of the data, choosing
 /// some items but discarding others.
 ///
+/// The collection retains its order of insertion/sampling so that [`into_ordered_vec`](Self::into_ordered_vec)
+/// re-sorts the items by the order they were seen.
+///
 /// # Example
 ///
 /// ```rust
@@ -22,9 +25,9 @@ const RANDOM_SEED: u64 = 42;
 /// // plus 960 items drawn randomly from the middle of the collection.
 /// let mut deque = SampleDeque::with_sizes(20, 1000, 20);
 ///
-/// let data_items = (1..=1_000_000).map(|x| f64::from(x).sqrt()).collect::<Vec<_>>();
+/// let data_items = (1..=100_000).map(|x| f64::from(x).sqrt()).collect::<Vec<_>>();
 /// for (i, data) in data_items.into_iter().enumerate() {
-///    // record the index and the data item
+///    // observe the index and the data item
 ///     deque.sample((i, data));
 /// }
 ///
@@ -33,13 +36,20 @@ const RANDOM_SEED: u64 = 42;
 ///
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SampleDeque<T> {
-    front: Vec<T>,
-    middle: SampleVec<T>,
-    back: VecDeque<T>,
+    front: Vec<(usize, T)>,
+    middle: SampleVec<(usize, T)>,
+    back: VecDeque<(usize, T)>,
     middle_insert_index: usize,
     front_size: usize,
     back_size: usize,
     middle_cap: usize,
+    seen: usize,
+}
+
+impl<T> Sampler<T> for SampleDeque<T> {
+    fn sample(&mut self, item: T) -> SamplingOutcome<T> {
+        SampleDeque::sample(self, item)
+    }
 }
 
 impl<T> SampleDeque<T> {
@@ -69,6 +79,7 @@ impl<T> SampleDeque<T> {
             middle: SampleVec::with_size(middle, RANDOM_SEED),
             back: VecDeque::new(),
             middle_insert_index: 0,
+            seen: 0,
         }
     }
 
@@ -86,14 +97,15 @@ impl<T> SampleDeque<T> {
     ///
     /// Performance is O(1), as the middle region is not ordered.
     pub fn sample(&mut self, item: T) -> SamplingOutcome<T> {
+        self.seen += 1;
         if self.front.len() < self.front_size {
-            self.front.push(item);
+            self.front.push((self.seen, item));
             return SamplingOutcome::Selected;
         }
 
         // if front is full, try back
         if self.back.len() < self.back_size {
-            self.back.push_back(item);
+            self.back.push_back((self.seen, item));
             return SamplingOutcome::Selected;
         }
 
@@ -102,18 +114,18 @@ impl<T> SampleDeque<T> {
         // if tail is being used if theres something to pop,
         // so put in tail and pop oldest to place in middle
         if let Some(old) = self.back.pop_front() {
-            self.back.push_back(item);
+            self.back.push_back((self.seen, item));
             match self.middle.sample(old) {
                 SamplingOutcome::Selected => SamplingOutcome::Selected,
-                SamplingOutcome::Replaced(old_middle) => SamplingOutcome::Replaced(old_middle),
-                SamplingOutcome::Rejected(old_back) => SamplingOutcome::Replaced(old_back),
+                SamplingOutcome::Replaced(old_middle) => SamplingOutcome::Replaced(old_middle.1),
+                SamplingOutcome::Rejected(old_back) => SamplingOutcome::Replaced(old_back.1),
             }
         } else {
             // if back.pop_front fails, yet back was at capacity then back size==0
-            match self.middle.sample(item) {
+            match self.middle.sample((self.seen, item)) {
                 SamplingOutcome::Selected => SamplingOutcome::Selected,
-                SamplingOutcome::Replaced(old_middle) => SamplingOutcome::Replaced(old_middle),
-                SamplingOutcome::Rejected(item) => SamplingOutcome::Rejected(item),
+                SamplingOutcome::Replaced(old_middle) => SamplingOutcome::Replaced(old_middle.1),
+                SamplingOutcome::Rejected(item) => SamplingOutcome::Rejected(item.1),
             }
         }
     }
@@ -121,6 +133,12 @@ impl<T> SampleDeque<T> {
     pub fn sizes(&self) -> (usize, usize, usize) {
         let total = self.middle_cap + self.front_size + self.back_size;
         (self.front_size, total, self.back_size)
+    }
+
+    /// Returns the total number of items seen, which will likely exceed the size if
+    /// items have been rejected or replaced.
+    pub fn seen(&self) -> usize {
+        self.seen
     }
 
     /// Returns the total number of elements in the vector.
@@ -133,13 +151,14 @@ impl<T> SampleDeque<T> {
         self.len() == 0
     }
 
-    /// Returns an iterator over all elements in the vector, starting with the front (in insertion order),
+    /// Returns a reference iterator over all elements in the vector, starting with the front (in insertion order),
     /// followed by the middle (unordered), and then the back (in insertion order).
-    pub fn iter(&self) -> impl Iterator<Item = &T> {
+    pub fn unordered_iter(&self) -> impl Iterator<Item = &T> {
         self.front
             .iter()
-            .chain(self.middle.as_unordered_slice().iter())
-            .chain(self.back.iter())
+            .map(|item| &item.1)
+            .chain(self.middle.as_unordered_slice().iter().map(|item| &item.1))
+            .chain(self.back.iter().map(|item| &item.1))
     }
 
     /// Returns an iterator over all elements in the vector, starting with the front (in insertion order),
@@ -147,18 +166,26 @@ impl<T> SampleDeque<T> {
     pub fn into_unordered_iter(self) -> impl Iterator<Item = T> {
         self.front
             .into_iter()
-            .chain(self.middle.into_unordered_vec())
-            .chain(self.back) // deque.into_iter is ordered
+            .map(|item| item.1)
+            .chain(
+                self.middle
+                    .into_unordered_vec()
+                    .into_iter()
+                    .map(|item| item.1),
+            )
+            .chain(self.back.into_iter().map(|item| item.1)) // deque.into_iter is ordered
     }
 
-    /// This is irreversible and consumes the sample.
-    pub fn into_ordered_vec(self) -> Vec<T>
-    where
-        T: Ord,
-    {
-        let mut vec = self.front;
-        let middle = self.middle.into_ordered_vec();
-        let back = self.back;
+    /// This is irreversible and consumes the sample. The ordering is by order of sampling.
+    pub fn into_ordered_vec(self) -> Vec<T> {
+        let mut vec: Vec<_> = self.front.into_iter().map(|(_, t)| t).collect();
+        let middle: Vec<_> = self
+            .middle
+            .into_ordered_vec_by_key(|item| item.0)
+            .into_iter()
+            .map(|(_, t)| t)
+            .collect();
+        let back: Vec<_> = self.back.into_iter().map(|(_, t)| t).collect();
         vec.extend(middle);
         vec.extend(back);
         vec
@@ -168,7 +195,7 @@ impl<T> SampleDeque<T> {
         if index >= self.front.len() {
             return None;
         }
-        self.front.get(index)
+        self.front.get(index).map(|item| &item.1)
     }
 
     pub fn get_back(&self, index: usize) -> Option<&T> {
@@ -178,6 +205,7 @@ impl<T> SampleDeque<T> {
             i if i < self.back.len() => self.back.get(self.back.len() - 1 - i),
             i => self.front.get(self.front.len() - 1 - (i - self.back.len())),
         }
+        .map(|item| &item.1)
     }
 }
 
@@ -207,8 +235,8 @@ mod tests {
         let front: Vec<_> = deque.front.to_vec();
         let back: Vec<_> = deque.back.iter().copied().collect();
 
-        assert_eq!(front, vec![1, 2, 3]);
-        assert_eq!(back, vec![9, 10]);
+        assert_eq!(front, vec![(1, 1), (2, 2), (3, 3)]);
+        assert_eq!(back, vec![(9, 9), (10, 10)]);
     }
 
     #[test]
@@ -262,17 +290,17 @@ mod tests {
         // check front and back
         let front: Vec<_> = deque.front.to_vec();
         let back: Vec<_> = deque.back.iter().copied().collect();
-        assert_eq!(front, vec![1, 2, 3]);
-        assert_eq!(back, vec![9, 10]);
+        assert_eq!(front, vec![(1, 1), (2, 2), (3, 3)]);
+        assert_eq!(back, vec![(9, 9), (10, 10)]);
 
         // check middle
         let mut middle: Vec<_> = deque.middle.as_unordered_slice().to_vec();
         middle.sort();
-        assert_eq!(middle, vec![4, 5, 6, 7, 8]);
+        assert_eq!(middle, vec![(4, 4), (5, 5), (6, 6), (7, 7), (8, 8)]);
 
         let mut evicted = vec![];
 
-        for i in 10..=15 {
+        for i in 11..=16 {
             let outcome = deque.sample(i);
             match outcome {
                 SamplingOutcome::Selected => panic!("expected Replaced or Rejected"),
@@ -287,8 +315,8 @@ mod tests {
         // check front and back
         let front: Vec<_> = deque.front.to_vec();
         let back: Vec<_> = deque.back.iter().copied().collect();
-        assert_eq!(front, vec![1, 2, 3]);
-        assert_eq!(back, vec![14, 15]);
+        assert_eq!(front, vec![(1, 1), (2, 2), (3, 3)]);
+        assert_eq!(back, vec![(15, 15), (16, 16)]);
 
         // check middle/evicted
         assert_eq!(middle.len(), 5);
@@ -311,6 +339,20 @@ mod tests {
         assert_eq!(deque.back.len(), 0);
 
         let head: Vec<_> = deque.front.to_vec();
-        assert_eq!(head, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+        assert_eq!(
+            head,
+            vec![
+                (1, 1),
+                (2, 2),
+                (3, 3),
+                (4, 4),
+                (5, 5),
+                (6, 6),
+                (7, 7),
+                (8, 8),
+                (9, 9),
+                (10, 10)
+            ]
+        );
     }
 }

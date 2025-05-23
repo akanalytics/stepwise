@@ -1,6 +1,6 @@
 //! A collection of sample algorithms
 //!
-//! These can be used as solvers, or to compare or benchmark against your own algorithms.
+//! These can be used as algorithmss, or to compare or benchmark against your own algorithms.
 mod bisection;
 mod gradient_descent;
 

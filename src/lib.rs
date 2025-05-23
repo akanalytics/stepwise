@@ -1,48 +1,17 @@
 #![doc=include_str!("../README.md")]
 mod algo;
 pub mod algos;
-mod driver;
+mod drive;
 mod example_usage;
 mod math;
 pub mod metrics;
 pub mod problems;
-mod progress_bar;
 mod rng;
 pub mod samplers;
-mod step;
 
 use std::error::Error;
 use std::fmt::{Debug, Display};
 use std::sync::Arc;
-
-pub use crate::math::VectorExt;
-pub use crate::{
-    algo::Algo,
-    driver::Driver,
-    driver::{fail_after_iters, fixed_iters, with_timeout},
-    step::Step,
-};
-
-pub mod utilities {
-    pub use crate::math::{central_difference_gradient, Tolerance};
-    pub use crate::step::format_duration;
-}
-
-/// Use `stepwise::prelude::*` for a 'no fuss' include everything approach.
-///
-/// metrics, problems, algos are brought into scope at the module level, so
-/// an individual metric would be refered to as [`metrics::MovingAvg`] and an algorithm
-/// as [`algos::GradientDescent`]
-pub mod prelude {
-    pub use crate::math::VectorExt;
-    pub use crate::{
-        algos, assert_approx_eq, assert_approx_ne, fail_after_iters, fixed_iters, metrics,
-        metrics::Metric,
-        problems,
-        utilities::{format_duration, Tolerance},
-        with_timeout, Algo, Driver, DriverError,
-    };
-}
 
 pub type BoxedError = Box<dyn Error + Send + Sync>;
 
@@ -57,6 +26,36 @@ pub enum DriverError {
     InitialCondition(String),
     Hyperparameter(String),
     General(String),
+    Checkpoint {
+        filename: String,
+        error: Arc<dyn Error + Send + Sync>,
+    },
+}
+
+pub use crate::{
+    algo::{Algo, FileFormat},
+    drive::format_duration,
+    drive::Step,
+    drive::{fail_after_iters, fixed_iters, with_timeout},
+    drive::{BoxedDriver, Driver, DynDriver, RecoveryFile},
+    math::{central_difference_gradient, Tolerance, VectorExt},
+};
+
+/// Use `stepwise::prelude::*` for a 'no fuss' include everything approach.
+///
+/// metrics, problems, algos are brought into scope at the module level, so
+/// an individual metric would be refered to as [`metrics::MovingAvg`] and an algorithm
+/// as [`algos::GradientDescent`]
+pub mod prelude {
+    pub use crate::math::VectorExt;
+    pub use crate::{
+        algos, assert_approx_eq, assert_approx_ne,
+        drive::format_duration,
+        fail_after_iters, fixed_iters, metrics,
+        metrics::{Metric, StatefulMetric},
+        problems, samplers, with_timeout, Algo, BoxedDriver, BoxedError, Driver, DriverError,
+        DynDriver, RecoveryFile,
+    };
 }
 
 const _: () = {
@@ -78,4 +77,11 @@ impl Error for DriverError {
             _ => None,
         }
     }
+}
+
+#[macro_export]
+macro_rules! log_trace {
+    ($($arg:tt)*) => {
+        // println!("[{:<35}] {}", module_path!(), format!($($arg)*));
+    };
 }

@@ -1,4 +1,7 @@
-use crate::{algo::AlgoResult, Algo};
+use crate::{
+    metrics::{GradL2Norm, Metric},
+    Algo, VectorExt as _,
+};
 use std::{convert::Infallible, ops::ControlFlow};
 
 ///
@@ -101,19 +104,26 @@ where
 {
     type Error = Infallible;
 
-    fn step(&mut self) -> AlgoResult<Self::Error> {
+    fn step(&mut self) -> (ControlFlow<()>, Result<(), Infallible>) {
         self.update_gradient();
         // allow stepwise Driver to decide when to cease iteration
         (ControlFlow::Continue(()), Ok(()))
     }
 }
 
+impl<G> Metric<&GradientDescent<G>> for GradL2Norm {
+    type Output = f64;
+
+    fn observe_opt(&mut self, algo: &GradientDescent<G>) -> Option<Self::Output> {
+        Some(algo.gradient.norm_l2())
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use std::error::Error;
-
     use super::*;
-    use crate::{assert_approx_eq, fixed_iters, problems::sphere_grad, Driver};
+    use crate::{assert_approx_eq, fixed_iters, problems::sphere_grad};
+    use std::error::Error;
 
     #[test]
     fn test_doc_gradient_descent() {

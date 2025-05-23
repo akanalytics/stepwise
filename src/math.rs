@@ -114,7 +114,7 @@ macro_rules! assert_approx_eq {
         assert_approx_eq!($a, $b, 1e-7);
     };
     ($a:expr, $b:expr, $tol:expr) => {
-        let res = $crate::utilities::Tolerance::tol_eq($a, $b, $tol);
+        let res = $crate::Tolerance::tol_eq($a, $b, $tol);
         assert!(!res.is_none(), "lengths differ, {:?} != {:?}", $a, $b,);
         assert!(
             res == Some(true),
@@ -137,7 +137,7 @@ macro_rules! assert_approx_ne {
         assert_approx_ne!($a, $b, 1e-7);
     };
     ($a:expr, $b:expr, $tol:expr) => {
-        let res = $crate::utilities::Tolerance::tol_eq($a, $b, $tol);
+        let res = $crate::Tolerance::tol_eq($a, $b, $tol);
         assert!(!res.is_none(), "lengths differ, {:?} != {:?}", $a, $b,);
         assert!(
             res == Some(false),

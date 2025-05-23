@@ -2,7 +2,6 @@ use log::debug;
 use std::error::Error;
 use stepwise::{
     algos::GradientDescent, assert_approx_eq, assert_approx_ne, fixed_iters, problems::abs_grad,
-    Driver,
 };
 
 fn main() -> Result<(), Box<dyn Error>> {
