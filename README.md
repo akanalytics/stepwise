@@ -50,8 +50,8 @@ assert_approx_eq!(solved.x(), &[0.0, 0.0]);
 
 # Example 2
 
-```
-# use std::time::Duration;
+```rust
+use std::time::Duration;
 use stepwise::prelude::*;
 
 let gd = algos::GradientDescent::new(0.01, vec![1.0, 2.0], problems::sphere_grad);
